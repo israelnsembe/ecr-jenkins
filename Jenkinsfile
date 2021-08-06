@@ -1,4 +1,4 @@
-pipeline {
+/* pipeline {
     agent any 
     environment {
         //TODO # 1 --> once you sign up for Docker hub, use that user_id here
@@ -11,7 +11,7 @@ pipeline {
     stages {
         stage('Cloning Git') {
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/akannan1087/myPythonDockerRepo']]])       
+                checkout([$class: 'GitSCM', branches: [[name: '.../master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/akannan1087/myPythonDockerRepo']]])       
             }
         }
     
@@ -53,4 +53,50 @@ pipeline {
       }
     }
   }
+} */
+
+// Build by me with aws EC2 server jenk-jenk
+
+pipeline {
+    agent any
+
+    environment {
+        registry = "977237087701.dkr.ecr.us-east-1.amazonaws.com/izzy-ecr001"
+    }
+
+    stages {
+        stage ('Chaeckout') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/israelnsembe/ecr-jenkins.git']]])
+            }
+        }
+        stage ('Docker Build') {
+            steps {
+                script {
+                    dockerImage = docker.build registry + ":$BUILD_NUMBER"
+                }
+            }
+        }
+        stage ('Docker Push') {
+            steps{
+                script {
+                    sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 977237087701.dkr.ecr.us-east-1.amazonaws.com'
+                    sh 'docker push 977237087701.dkr.ecr.us-east-1.amazonaws.com/izzy-ecr001:$BUILD_NUMBER'
+                }
+            }
+        }
+        stage ('Stop Previous Container') {
+            steps {
+                sh 'docker ps -f name=mypythonContainer -q | xargs --no-run-if-empty docker container stop'
+                sh 'docker container ls -a -fname=mypythonContainer -q | xargs -r docker container rm'
+            }
+        }
+        stage ('Docker Run') {
+            steps {
+                script {
+                    sh 'docker run -d -p 8090:5000 --rm --name=mypythonContainer 977237087701.dkr.ecr.us-east-1.amazonaws.com/izzy-ecr001:$BUILD_NUMBER'
+                }
+            }
+        }
+    }
 }
